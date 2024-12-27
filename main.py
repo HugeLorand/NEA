@@ -9,8 +9,9 @@ class App:
         self._size = self.weight, self.height = 1920, 1080
         self._caption = title
         self._dragitems = []
-        self.selected = None
-        self.offset = [0,0]
+        self._selected = None
+        self._offset = [0,0]
+        self._clock = pygame.time.Clock()
 
     def on_init(self):
         pygame.init()
@@ -26,33 +27,32 @@ class App:
             if event.button == 1:
                 #goes through _dragitems and selects an item that collides with the mouse, if available
                 for index, item in enumerate(self._dragitems):           
-                    if item.collidepoint(event.pos):
-                        self.selected = index
+                    if item[0].collidepoint(event.pos):
+                        self._selected = index
                         mouse_x, mouse_y = event.pos
-                        self.offset[0] = item.x - mouse_x
-                        self.offset[1] = item.y - mouse_y
-                        print(self.offset[0],self.offset[1])
+                        self._offset[0] = item[0].x - mouse_x
+                        self._offset[1] = item[0].y - mouse_y
 
         elif event.type == pygame.MOUSEBUTTONUP:
             #deselects item
             if event.button == 1:            
-                self.selected = None
+                self._selected = None
 
         elif event.type == pygame.MOUSEMOTION:
-            if self.selected is not None: # selected can be `0` so `is not None` is required, which is more efficient than "!="
+            if self._selected is not None: # selected can be `0` so `is not None` is required, which is more efficient than "!="
                 # moves selected item
-                self._dragitems[self.selected].x = event.pos[0] + self.offset[0]
-                self._dragitems[self.selected].y = event.pos[1] + self.offset[1]
+                self._dragitems[self._selected][0].x = event.pos[0] + self._offset[0]
+                self._dragitems[self._selected][0].y = event.pos[1] + self._offset[1]
                 
 
 
     def on_loop(self):
-        pass
+        self._clock.tick(144)
     def on_render(self):
+        self._display_surf.fill(Color(0,0,0))
         for item in self._dragitems:
-            self._display_surf.fill(Color(0,0,0))
-            pygame.draw.rect(self._display_surf,Color(255,255,255),item)
-            pygame.display.flip()
+            pygame.draw.rect(self._display_surf,item[1],item[0])
+        pygame.display.flip()
     def on_cleanup(self):
         pygame.quit()
  
@@ -60,7 +60,8 @@ class App:
         if self.on_init() == False:
             self._running = False
         #adds a source in the centre of the screen with placeholder values
-        self.add_source([self.weight/2,self.height/2],"point",10,10,100,[255,255,255],False)
+        self.add_source([self.weight/2,self.height/2],"point",10,10,100,Color(255,0,0),False)
+        self.add_source([(self.weight/2)+50,(self.height/2)+50],"point",10,10,100,Color(0,0,255),False)
 
         while( self._running ):
             for event in pygame.event.get():
@@ -69,14 +70,14 @@ class App:
             self.on_render()
         self.on_cleanup()
 
-    def add_drag(self,pos,size):
+    def add_drag(self,pos,size,color):
         #adds a draggable object at position [x,y], of size [width,height]
-        item = item_draggable.Item(pos,size)
+        item = item_draggable.Item(pos,size,color)
         self._dragitems.append(item.shape())
     
-    def add_source(self,pos,type,frequency,wavelength,amplitude,colour,decay,size=[10,10]):
+    def add_source(self,pos,type,frequency,wavelength,amplitude,color,decay,size=[10,10]):
         #adds a source as a draggable object of size 10x10
-        self.add_drag(pos,size)
+        self.add_drag(pos,size,color)
         pass
 
 
