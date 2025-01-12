@@ -1,12 +1,17 @@
 import pygame
 from pygame.locals import *
+from OpenGL.GL import *
+from OpenGL.GLU import *
 import item_draggable
+import conversion
+
+SQUARE_EDGES = [(0,1),(0,2),(1,3),(2,3)]
 
 class App:
     def __init__(self,title):
         self._running = True
         self._display_surf = None
-        self._size = self.weight, self.height = 1920, 1080
+        self._size = self.weight, self.height = 1080, 1080
         self._caption = title
         self._dragitems = []
         self._selected = None
@@ -15,8 +20,10 @@ class App:
 
     def on_init(self):
         pygame.init()
-        self._display_surf = pygame.display.set_mode(self._size, pygame.HWSURFACE | pygame.DOUBLEBUF)
+        self._display_surf = pygame.display.set_mode(self._size, pygame.DOUBLEBUF | pygame.OPENGL)
         self._caption = pygame.display.set_caption(self._caption)
+        gluPerspective(45, (self.weight/self.height), 0.1, 50.0)
+        glTranslatef(0.0,0.0, -5)
         self._running = True
   
     def on_event(self, event):
@@ -49,9 +56,9 @@ class App:
     def on_loop(self):
         self._clock.tick(144)
     def on_render(self):
-        self._display_surf.fill(Color(0,0,0))
-        for item in self._dragitems:
-            pygame.draw.rect(self._display_surf,item[1],item[0])
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+        self.draw_items()
+        #insert here shader that renders waves to screen by taking previous frame and running calculations on each pixel to decode r g and b channels (displacement, velocity, refractive index at position)
         pygame.display.flip()
     def on_cleanup(self):
         pygame.quit()
@@ -75,13 +82,21 @@ class App:
         item = item_draggable.Item(pos,size,color)
         self._dragitems.append(item.shape())
     
-    def add_source(self,pos,type,frequency,wavelength,amplitude,color,decay,size=[10,10]):
+    def add_source(self,pos,type,frequency,wavelength,amplitude,color,decay,size=[100,100]):
         #adds a source as a draggable object of size 10x10
         self.add_drag(pos,size,color)
         pass
 
+    def draw_items(self):
+        for item in self._dragitems:
+            draw = conversion.derectify(item[0],(self.weight,self.height))
+            glBegin(GL_LINES)
+            for edge in SQUARE_EDGES:
+                for vertex in edge:
+                    glVertex3fv(draw[vertex])
+            glEnd()
 
-        
+
  
 if __name__ == "__main__" :
     WaveSim = App(title="WaveSim")
