@@ -2,8 +2,8 @@ from item_draggable import Item
 
 
 class Source(Item):
-    def __init__(self, pos, size, frequency, wavelength, amplitude, color, decay):
-        super().__init__(pos, size, color)
+    def __init__(self, pos, size, frequency, wavelength, amplitude, decay):
+        super().__init__(pos, size)
         self._freq = frequency
         self._wavelength = wavelength
         self._amp = amplitude

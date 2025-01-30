@@ -4,12 +4,11 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.shaders import compileShader
 import item_draggable
-import conversion
+from conversion import rectify, derectify
 from source import Source
 from wall import Wall
 import math
 import time
-import numpy as np
 
 SQUARE_EDGES = [(0, 1), (0, 2), (1, 3), (2, 3)]
 
@@ -38,6 +37,14 @@ class App:
         self._wave_texture = None  # This is the OpenGL texture for the wave simulation
         self._colour_scheme = []  # This is the colour scheme for the simulation
 
+        (
+            self.shaderProgramMain,
+            self.shaderProgramStatic,
+            self.self.shaderProgramProgressive,
+            self.shaderProgramDraw,
+            self.shaderProgramDrawLine,
+        ) = None
+
     def on_init(self):
         pygame.init()
         # Set up the display
@@ -51,40 +58,40 @@ class App:
         self._running = True
 
         # initialise shaders
-        shaderProgramMain = self.create_shader(
+        self.shaderProgramMain = self.create_shader(
             "shaders/display-fs.glsl", "shaders/vs.glsl"
         )
-        shaderProgramMain.brightnessUniform = glGetUniformLocation(
-            shaderProgramMain.get_id(), "brightness"
+        self.shaderProgramMain.brightnessUniform = glGetUniformLocation(
+            self.shaderProgramMain.get_id(), "brightness"
         )
-        shaderProgramMain.coloursUniform = glGetUniformLocation(
-            shaderProgramMain.get_id(), "colours"
+        self.shaderProgramMain.coloursUniform = glGetUniformLocation(
+            self.shaderProgramMain.get_id(), "colours"
         )
 
-        shaderProgramStatic = self.create_shader(
+        self.shaderProgramStatic = self.create_shader(
             "shaders/simulate-stat-fs.glsl", "shaders/vs.glsl"
         )
-        shaderProgramStatic.stepSizeXUniform = glGetUniformLocation(
-            shaderProgramStatic.get_id(), "stepSizeX"
+        self.shaderProgramStatic.stepSizeXUniform = glGetUniformLocation(
+            self.shaderProgramStatic.get_id(), "stepSizeX"
         )
-        shaderProgramStatic.stepSizeYUniform = glGetUniformLocation(
-            shaderProgramStatic.get_id(), "stepSizeY"
+        self.shaderProgramStatic.stepSizeYUniform = glGetUniformLocation(
+            self.shaderProgramStatic.get_id(), "stepSizeY"
         )
 
-        shaderProgramProgressive = self.create_shader(
+        self.shaderProgramProgressive = self.create_shader(
             "shaders/simulate-prog-fs.glsl", "shaders/vs.glsl"
         )
-        shaderProgramProgressive.stepSizeXUniform = glGetUniformLocation(
-            shaderProgramProgressive.get_id(), "stepSizeX"
+        self.shaderProgramProgressive.stepSizeXUniform = glGetUniformLocation(
+            self.shaderProgramProgressive.get_id(), "stepSizeX"
         )
-        shaderProgramProgressive.stepSizeYUniform = glGetUniformLocation(
-            shaderProgramProgressive.get_id(), "stepSizeY"
+        self.shaderProgramProgressive.stepSizeYUniform = glGetUniformLocation(
+            self.shaderProgramProgressive.get_id(), "stepSizeY"
         )
 
-        shaderProgramDraw = self.create_shader(
+        self.shaderProgramDraw = self.create_shader(
             "shaders/draw-fs.glsl", "shaders/draw-vs.glsl"
         )
-        shaderProgramDrawLine = self.create_shader(
+        self.shaderProgramDrawLine = self.create_shader(
             "shaders/draw-line-fs.glsl", "shaders/draw-vs.glsl"
         )
 
@@ -121,8 +128,14 @@ class App:
     def on_loop(self):
         # update the simulation at a framerate of 144 fps
         self._clock.tick(144)
+        # check if items are being changed
 
     def on_render(self):
+        # setup for drawing
+        # draw items
+        # draw sources
+        # draw walls
+        # render waves
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         self.draw_items()
         # insert here shader that renders waves to screen by taking previous frame and running calculations on each pixel to decode r g and b channels (displacement, velocity, refractive index at position)
@@ -136,18 +149,11 @@ class App:
             self._running = False
 
         # Add sources and walls
+        self.add_source([self.weight / 2, self.height / 2], 5, 100, 50, False)
         self.add_source(
-            [self.weight / 2, self.height / 2], 5, 100, 50, (255, 0, 0), False
+            [(self.weight / 2) + 200, (self.height / 2) + 200], 2, 200, 30, False
         )
-        self.add_source(
-            [(self.weight / 2) + 200, (self.height / 2) + 200],
-            2,
-            200,
-            30,
-            (0, 0, 255),
-            False,
-        )
-        self.add_wall([300, 300], [100, 300], (0, 255, 0))
+        self.add_wall([300, 300], [100, 300])
 
         # Run the main loop
         while self._running:
@@ -158,24 +164,24 @@ class App:
 
         self.on_cleanup()
 
-    def add_drag(self, pos, size, colour):
+    def add_drag(self, pos, size):
         # adds a draggable object at position [x,y], of size [width,height]
-        item = item_draggable.Item(pos, size, colour)
+        item = item_draggable.Item(pos, size)
         self._dragitems.append(item.shape())
 
-    def add_source(self, pos, frequency, wavelength, amplitude, colour, decay):
-        source = Source(pos, [10, 10], frequency, wavelength, amplitude, colour, decay)
+    def add_source(self, pos, frequency, wavelength, amplitude, decay):
+        source = Source(pos, [10, 10], frequency, wavelength, amplitude, decay)
         self._sources.append(source)
-        self.add_drag(pos, [10, 10], colour)
+        self.add_drag(pos, [10, 10])
 
-    def add_wall(self, start_pos, end_pos, colour):
-        wall = Wall(start_pos, end_pos, colour)
+    def add_wall(self, start_pos, end_pos):
+        wall = Wall(start_pos, end_pos)
         self._walls.append(wall)
 
     def draw_items(self):
         for item in self._dragitems:
             # Convert Pygame rectangle to OpenGL vertices
-            draw = conversion.derectify(item[0], (self.weight, self.height))
+            draw = derectify(item[0], (self.weight, self.height))
             glBegin(GL_LINES)
             for edge in SQUARE_EDGES:
                 for vertex in edge:

@@ -1,5 +1,4 @@
 import pygame
-import numpy as np
 
 
 def rectify(corners, displaysize):
