@@ -1,16 +1,16 @@
 #version 450
 
-attribute vec3 aVPos;
-attribute vec4 aColour;
+layout (location = 0) in vec3 aVPos;
+layout (location = 1) in vec4 aColour;
 
 uniform mat4 uMVMatrix;
 uniform mat4 uPMatrix;
 
-varying vec4 vPos;
-varying vec4 vColour;
+out vec4 vPos;
+out vec4 vColour;
 
 void main(void) {
-    vPosition = uMVMatrix * vec4(aVertexPosition, 1.0);
-    gl_Position = uPMatrix * vPosition;
+    vPos = uMVMatrix * vec4(aVPos, 1.0);
+    gl_Position = uPMatrix * vPos;
     vColour = aColour;
 }

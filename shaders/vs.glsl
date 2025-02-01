@@ -1,15 +1,15 @@
 #version 450
 
-attribute vec3 aVPos;
-attribute vec2 aTexCoord;
-attribute float aDamping;
+layout (location = 0) in vec3 aVPos;
+layout (location = 1) in vec2 aTexCoord;
+layout (location = 2) in float aDamping;
 
 uniform mat4 uMVMatrix;
 uniform mat4 uPMatrix;
 
-varying vec2 vTexCoord;
-varying vec4 vPos;
-varying float vDamping;
+out vec2 vTexCoord;
+out vec4 vPos;
+out float vDamping;
 
 
 void main(void) {

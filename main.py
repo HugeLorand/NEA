@@ -37,13 +37,12 @@ class App:
         self._wave_texture = None  # This is the OpenGL texture for the wave simulation
         self._colour_scheme = []  # This is the colour scheme for the simulation
 
-        (
-            self.shaderProgramMain,
-            self.shaderProgramStatic,
-            self.self.shaderProgramProgressive,
-            self.shaderProgramDraw,
-            self.shaderProgramDrawLine,
-        ) = None
+    
+        self.shaderProgramMain = None
+        self.shaderProgramStatic = None
+        self.shaderProgramProgressive = None
+        self.shaderProgramDraw = None
+        self.shaderProgramDrawLine = None
 
     def on_init(self):
         pygame.init()
@@ -189,8 +188,8 @@ class App:
             glEnd()
 
     def load_shader(self, shader_file):
-        with open(shader_file, "r") as f:
-            shader_source = f.read()
+        f =  open(shader_file, "r")
+        shader_source = f.read()
         if shader_source:
 
             if "fs" in shader_file:

@@ -10,12 +10,14 @@
 #define TS_COL_SOURCE 7
 #define TS_COL_COUNT  9
 
-    varying vec2 vTexCoord;
-    varying vec4 vPos;
+    in vec2 vTexCoord;
+    in vec4 vPos;
 
     uniform sampler2D uSampler;
     uniform float brightness;
     uniform lowp vec3 colours[TS_COL_COUNT];
+
+	out vec4 FragColor;
 
 	// shader for displaying waves on screen
     void main(void) {
@@ -38,5 +40,5 @@
                 col = mix(mix(colours[TS_COL_MED], colours[TS_COL_NEUTRAL], med),
                 		    mix(colours[TS_COL_NEG_MED], colours[TS_COL_NEG], med), -r);
 		}
-        gl_FragColor = vec4(col, 1.);
+        FragColor = vec4(col, 1.);
     }

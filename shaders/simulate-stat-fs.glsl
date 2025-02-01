@@ -1,12 +1,14 @@
 #version 450
 
-varying vec2 vTexCoord;
-varying vec4 vPosition;
-varying float vDamping;
+in vec2 vTexCoord;
+in vec4 vPosition;
+in float vDamping;
 
 uniform sampler2D uSampler;
 uniform float stepSizeX;
 uniform float stepSizeY;
+
+out vec4 FragColor;
 
 
 	// get wave value for adjacent square, handling walls properly depending on progressive flag
@@ -38,5 +40,5 @@ void main()
         		newdisp = disp+newvel;
         }
 		// update displacement and velocity
-        gl_FragColor = vec4(newdisp, newvel, pv.b, 1.);
+        FragColor = vec4(newdisp, newvel, pv.b, 1.);
 }
