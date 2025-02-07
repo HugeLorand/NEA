@@ -6,7 +6,7 @@ from OpenGL.GL.shaders import compileShader
 import item_draggable
 from conversion import rectify, derectify
 from source import Source
-from wall import Wall
+from medium import Medium
 import math
 import time
 
@@ -37,7 +37,6 @@ class App:
         self._wave_texture = None  # This is the OpenGL texture for the wave simulation
         self._colour_scheme = []  # This is the colour scheme for the simulation
 
-    
         self.shaderProgramMain = None
         self.shaderProgramStatic = None
         self.shaderProgramProgressive = None
@@ -93,6 +92,102 @@ class App:
         self.shaderProgramDrawLine = self.create_shader(
             "shaders/draw-line-fs.glsl", "shaders/draw-vs.glsl"
         )
+
+        # setup buffers
+
+    """
+    	vertexPositionBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+    	vertices = [
+    	            -1, +1,
+    	            +1, +1,
+    	            -1, -1,
+    	            +1, -1,
+    	            ];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]), gl.STATIC_DRAW);
+    	vertexPositionBuffer.itemSize = 2;
+    	vertexPositionBuffer.numItems = 4;
+
+    	if (!vertexTextureCoordBuffer)
+    		vertexTextureCoordBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, vertexTextureCoordBuffer);
+    	var textureCoords = [
+    	                     windowOffsetX/gridSizeX, 1-windowOffsetY/gridSizeY,
+    	                     1-windowOffsetX/gridSizeX, 1-windowOffsetY/gridSizeY,
+    	                     windowOffsetX/gridSizeX,   windowOffsetY/gridSizeY,
+    	                     1-windowOffsetX/gridSizeX,   windowOffsetY/gridSizeY
+    	                     ];
+    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+    	vertexTextureCoordBuffer.itemSize = 2;
+    	vertexTextureCoordBuffer.numItems = 4;
+
+    	if (!sourceBuffer)
+    		sourceBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, sourceBuffer);
+    	sourceBuffer.itemSize = 2;
+    	sourceBuffer.numItems = 2;
+
+    	if (!colorBuffer)
+    		colorBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    	colorBuffer.itemSize = 4;
+    	colorBuffer.numItems = 2;
+
+    	if (!screen3DTextureBuffer)
+    		screen3DTextureBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, screen3DTextureBuffer);
+    	screen3DTextureBuffer.itemSize = 2;
+    	var texture3D = [];
+    	gridRange = textureCoords[2]-textureCoords[0];
+    	for (i = 0; i <= gridSize3D; i++) {
+    		texture3D.push(textureCoords[0],
+    					   textureCoords[0]+gridRange*i/gridSize3D,
+    					   textureCoords[0]+gridRange/gridSize3D,
+    					   textureCoords[0]+gridRange*i/gridSize3D);
+    	}
+    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texture3D), gl.STATIC_DRAW);
+    	screen3DTextureBuffer.numItems = texture3D.length / 2;
+    	
+    	simPosition = [];
+    	simDamping = [];
+    	simTextureCoord = [];
+    	
+    	// visible area
+    	setPosRect(windowOffsetX, windowOffsetY, gridSizeX-windowOffsetX, gridSizeY-windowOffsetY);
+
+    	// sides
+    	setPosRect(1, windowOffsetY, windowOffsetX, gridSizeY-windowOffsetY);
+    	setPosRect(gridSizeX-windowOffsetX, windowOffsetY, gridSizeX-2, gridSizeY-windowOffsetY);
+    	setPosRect(windowOffsetX, 1, gridSizeX-windowOffsetX, windowOffsetY);
+    	setPosRect(windowOffsetX, gridSizeY-windowOffsetY, gridSizeX-windowOffsetX, gridSizeY-2);
+
+    	// corners
+    	setPosRect(1, 1, windowOffsetX, windowOffsetY);
+    	setPosRect(gridSizeX-windowOffsetX, 1, gridSizeX-2, windowOffsetY);
+    	setPosRect(1, gridSizeY-windowOffsetY, windowOffsetX, gridSizeY-2);
+    	setPosRect(gridSizeX-windowOffsetX, gridSizeY-windowOffsetY, gridSizeX-2, gridSizeY-2);
+
+
+    	if (!simVertexPositionBuffer)
+    		simVertexPositionBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexPositionBuffer);
+    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simPosition), gl.STATIC_DRAW);
+    	simVertexPositionBuffer.itemSize = 2;
+    	simVertexPositionBuffer.numItems = simPosition.length/2;
+
+    	if (!simVertexTextureCoordBuffer)
+    		simVertexTextureCoordBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexTextureCoordBuffer);
+    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simTextureCoord), gl.STATIC_DRAW);
+    	simVertexTextureCoordBuffer.itemSize = 2;
+    	simVertexTextureCoordBuffer.numItems = simPosition.length/2;
+
+    	if (!simVertexDampingBuffer)
+    		simVertexDampingBuffer = gl.createBuffer();
+    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexDampingBuffer);
+    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simDamping), gl.STATIC_DRAW);
+    	simVertexDampingBuffer.itemSize = 1;
+    	simVertexDampingBuffer.numItems = simDamping.length;"""
 
     def on_event(self, event):
 
@@ -188,7 +283,7 @@ class App:
             glEnd()
 
     def load_shader(self, shader_file):
-        f =  open(shader_file, "r")
+        f = open(shader_file, "r")
         shader_source = f.read()
         if shader_source:
 
@@ -327,6 +422,13 @@ class ShaderSimulate(Shader):
 
         self.stepSizeXUniform = None
         self.stepSizeYUniform = None
+
+
+# classes used for buffer setup
+
+
+class Buffer:
+    pass
 
 
 if __name__ == "__main__":
