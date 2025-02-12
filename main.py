@@ -4,13 +4,12 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.shaders import compileShader
 import item_draggable
-from conversion import rectify, derectify
+from conversion import rectify, derectify, invmat, mat4tomat3
 from source import Source
 from medium import Medium
 import math
 import time
-
-SQUARE_EDGES = [(0, 1), (0, 2), (1, 3), (2, 3)]
+import numpy as np
 
 
 class App:
@@ -18,6 +17,7 @@ class App:
         self._running = True  # This is the main loop flag
         self._display_surf = None  # This is the display surface for PyGame
         self._size = self.weight, self.height = 1080, 1080  # This is the window size
+        self._window_offset = 0  # This is ?
         self._caption = title  # This is the window title
         self._dragitems = []  # This is a list of all draggable items
         self._sources = []  # This is a list of all sources
@@ -35,13 +35,36 @@ class App:
         )  # This is the time the simulation started (can change in order to prevent issues when items are added or moved)
         self._wavelength = 10  # This is the simulation wavelength
         self._wave_texture = None  # This is the OpenGL texture for the wave simulation
-        self._colour_scheme = []  # This is the colour scheme for the simulation
+        self.damping = 1.0  # This is the damping factor for the simulation
 
         self.shaderProgramMain = None
         self.shaderProgramStatic = None
         self.shaderProgramProgressive = None
         self.shaderProgramDraw = None
         self.shaderProgramDrawLine = None
+
+        self.vertexpPositionBuffer = None
+        self.vertexTextureCoordBuffer = None
+        self.sourceBuffer = None
+        self.colorBuffer = None
+        self.simVertexPositionBuffer = None
+        self.simVertexTextureCoordBuffer = None
+        self.simVertexDampingBuffer = None
+
+        self.simPosition = []
+        self.simDamping = []
+        self.simTextureCoord = []
+
+        self.progressive = False
+
+        self.mvMatrix = np.matrix(np.identity(4), np.float32)
+        self.pMatrix = np.matrix(np.identity(4), np.float32)
+        self.mvMatrixStack = []
+
+        self.renderTexture1 = None
+        self.renderTexture2 = None
+
+        self.colourscheme = [1, 1, 1, 1, 1, 1, 1, 1]
 
     def on_init(self):
         pygame.init()
@@ -95,99 +118,128 @@ class App:
 
         # setup buffers
 
-    """
-    	vertexPositionBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
-    	vertices = [
-    	            -1, +1,
-    	            +1, +1,
-    	            -1, -1,
-    	            +1, -1,
-    	            ];
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]), gl.STATIC_DRAW);
-    	vertexPositionBuffer.itemSize = 2;
-    	vertexPositionBuffer.numItems = 4;
+        self.vertexPositionBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.vertexPositionBuffer.id)
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            np.array([-1, +1, +1, +1, -1, -1, +1, -1], dtype=np.float32),
+            GL_STATIC_DRAW,
+        )
+        self.vertexPositionBuffer.itemSize = 2
+        self.vertexPositionBuffer.numItems = 4
 
-    	if (!vertexTextureCoordBuffer)
-    		vertexTextureCoordBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, vertexTextureCoordBuffer);
-    	var textureCoords = [
-    	                     windowOffsetX/gridSizeX, 1-windowOffsetY/gridSizeY,
-    	                     1-windowOffsetX/gridSizeX, 1-windowOffsetY/gridSizeY,
-    	                     windowOffsetX/gridSizeX,   windowOffsetY/gridSizeY,
-    	                     1-windowOffsetX/gridSizeX,   windowOffsetY/gridSizeY
-    	                     ];
-    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
-    	vertexTextureCoordBuffer.itemSize = 2;
-    	vertexTextureCoordBuffer.numItems = 4;
+        self.vertexTextureCoordBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.vertexTextureCoordBuffer.id)
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            np.array(
+                [
+                    self._window_offset / self.weight,
+                    1 - self._window_offset / self.height,
+                    1 - self._window_offset / self.weight,
+                    1 - self._window_offset / self.height,
+                    self._window_offset / self.weight,
+                    self._window_offset / self.height,
+                    1 - self._window_offset / self.weight,
+                    self._window_offset / self.height,
+                ],
+                dtype=np.float32,
+            ),
+            GL_STATIC_DRAW,
+        )
+        self.vertexTextureCoordBuffer.itemSize = 2
+        self.vertexTextureCoordBuffer.numItems = 4
 
-    	if (!sourceBuffer)
-    		sourceBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, sourceBuffer);
-    	sourceBuffer.itemSize = 2;
-    	sourceBuffer.numItems = 2;
+        self.sourceBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.sourceBuffer.id)
+        self.sourceBuffer.itemSize = 2
+        self.sourceBuffer.numItems = 2
 
-    	if (!colorBuffer)
-    		colorBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    	colorBuffer.itemSize = 4;
-    	colorBuffer.numItems = 2;
+        self.colorBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.colorBuffer.id)
+        self.colorBuffer.itemSize = 4
+        self.colorBuffer.numItems = 2
 
-    	if (!screen3DTextureBuffer)
-    		screen3DTextureBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, screen3DTextureBuffer);
-    	screen3DTextureBuffer.itemSize = 2;
-    	var texture3D = [];
-    	gridRange = textureCoords[2]-textureCoords[0];
-    	for (i = 0; i <= gridSize3D; i++) {
-    		texture3D.push(textureCoords[0],
-    					   textureCoords[0]+gridRange*i/gridSize3D,
-    					   textureCoords[0]+gridRange/gridSize3D,
-    					   textureCoords[0]+gridRange*i/gridSize3D);
-    	}
-    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texture3D), gl.STATIC_DRAW);
-    	screen3DTextureBuffer.numItems = texture3D.length / 2;
-    	
-    	simPosition = [];
-    	simDamping = [];
-    	simTextureCoord = [];
-    	
-    	// visible area
-    	setPosRect(windowOffsetX, windowOffsetY, gridSizeX-windowOffsetX, gridSizeY-windowOffsetY);
+        # visible area
+        self.setPosRect(
+            self._window_offset,
+            self._window_offset,
+            self.weight - self._window_offset,
+            self.height - self._window_offset,
+        )
 
-    	// sides
-    	setPosRect(1, windowOffsetY, windowOffsetX, gridSizeY-windowOffsetY);
-    	setPosRect(gridSizeX-windowOffsetX, windowOffsetY, gridSizeX-2, gridSizeY-windowOffsetY);
-    	setPosRect(windowOffsetX, 1, gridSizeX-windowOffsetX, windowOffsetY);
-    	setPosRect(windowOffsetX, gridSizeY-windowOffsetY, gridSizeX-windowOffsetX, gridSizeY-2);
+        # sides
+        self.setPosRect(
+            1,
+            self._window_offset,
+            self._window_offset,
+            self.height - self._window_offset,
+        )
+        self.setPosRect(
+            self.weight - self._window_offset,
+            self._window_offset,
+            self.weight - 2,
+            self.height - self._window_offset,
+        )
+        self.setPosRect(
+            self._window_offset,
+            1,
+            self.weight - self._window_offset,
+            self._window_offset,
+        )
+        self.setPosRect(
+            self._window_offset,
+            self.height - self._window_offset,
+            self.weight - self._window_offset,
+            self.height - 2,
+        )
 
-    	// corners
-    	setPosRect(1, 1, windowOffsetX, windowOffsetY);
-    	setPosRect(gridSizeX-windowOffsetX, 1, gridSizeX-2, windowOffsetY);
-    	setPosRect(1, gridSizeY-windowOffsetY, windowOffsetX, gridSizeY-2);
-    	setPosRect(gridSizeX-windowOffsetX, gridSizeY-windowOffsetY, gridSizeX-2, gridSizeY-2);
+        # corners
+        self.setPosRect(1, 1, self._window_offset, self._window_offset)
+        self.setPosRect(
+            self.weight - self._window_offset, 1, self.weight - 2, self._window_offset
+        )
+        self.setPosRect(
+            1, self.height - self._window_offset, self._window_offset, self.height - 2
+        )
+        self.setPosRect(
+            self.weight - self._window_offset,
+            self.height - self._window_offset,
+            self.weight - 2,
+            self.height - 2,
+        )
 
+        self.simVertexPositionBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexPositionBuffer.id)
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            np.array(self.simPosition, dtype=np.float32),
+            GL_STATIC_DRAW,
+        )
+        self.simVertexPositionBuffer.itemSize = 2
+        self.simVertexPositionBuffer.numItems = len(self.simPosition) / 2
 
-    	if (!simVertexPositionBuffer)
-    		simVertexPositionBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexPositionBuffer);
-    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simPosition), gl.STATIC_DRAW);
-    	simVertexPositionBuffer.itemSize = 2;
-    	simVertexPositionBuffer.numItems = simPosition.length/2;
+        self.simVertexTextureCoordBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexTextureCoordBuffer.id)
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            np.array(self.simTextureCoord, dtype=np.float32),
+            GL_STATIC_DRAW,
+        )
+        self.simVertexTextureCoordBuffer.itemSize = 2
+        self.simVertexTextureCoordBuffer.numItems = len(self.simPosition) / 2
 
-    	if (!simVertexTextureCoordBuffer)
-    		simVertexTextureCoordBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexTextureCoordBuffer);
-    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simTextureCoord), gl.STATIC_DRAW);
-    	simVertexTextureCoordBuffer.itemSize = 2;
-    	simVertexTextureCoordBuffer.numItems = simPosition.length/2;
+        self.simVertexDampingBuffer = Buffer(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexDampingBuffer.id)
+        glBufferData(
+            GL_ARRAY_BUFFER, np.array(self.simDamping, dtype=np.float32), GL_STATIC_DRAW
+        )
+        self.simVertexDampingBuffer.itemSize = 1
+        self.simVertexDampingBuffer.numItems = len(self.simDamping)
 
-    	if (!simVertexDampingBuffer)
-    		simVertexDampingBuffer = gl.createBuffer();
-    	gl.bindBuffer(gl.ARRAY_BUFFER, simVertexDampingBuffer);
-    	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(simDamping), gl.STATIC_DRAW);
-    	simVertexDampingBuffer.itemSize = 1;
-    	simVertexDampingBuffer.numItems = simDamping.length;"""
+        # setup texture framebuffers
+        self.renderTexture1 = self.initTextureFramebuffer()
+        self.renderTexture2 = self.initTextureFramebuffer()
 
     def on_event(self, event):
 
@@ -199,12 +251,12 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
             if event.button == 1:
                 # goes through _dragitems and selects an item that collides with the mouse, if available
                 for index, item in enumerate(self._dragitems):
-                    if item[0].collidepoint(event.pos):
+                    if item.collidepoint(event.pos):
                         # selects item
                         self._selected = index
                         mouse_x, mouse_y = event.pos
-                        self._offset[0] = item[0].x - mouse_x
-                        self._offset[1] = item[0].y - mouse_y
+                        self._offset[0] = item.x - mouse_x
+                        self._offset[1] = item.y - mouse_y
 
         elif event.type == pygame.MOUSEBUTTONUP:
             # deselects item
@@ -224,15 +276,148 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
         self._clock.tick(144)
         # check if items are being changed
 
-    def on_render(self):
-        # setup for drawing
-        # draw items
-        # draw sources
-        # draw walls
-        # render waves
+        # simulate
+        rt = self.renderTexture1
+        self.renderTexture1 = self.renderTexture2
+        self.renderTexture2 = rt
+
+        rttFramebuffer = self.renderTexture1.framebuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, rttFramebuffer.id)
+
+        if self.progressive:
+            prog = self.shaderProgramProgressive
+        else:
+            prog = self.shaderProgramStatic
+        glUseProgram(prog.id)
+        rttFramebuffer = self.renderTexture1.framebuffer
+        glViewport(0, 0, rttFramebuffer.width, rttFramebuffer.height)
+        glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        self.draw_items()
-        # insert here shader that renders waves to screen by taking previous frame and running calculations on each pixel to decode r g and b channels (displacement, velocity, refractive index at position)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexPositionBuffer.get_id())
+        glVertexAttribPointer(
+            prog.vertexPositionAttribute,
+            self.simVertexPositionBuffer.itemSize,
+            GL_FLOAT,
+            False,
+            0,
+            0,
+        )
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexTextureCoordBuffer.get_id())
+        glVertexAttribPointer(
+            prog.textureCoordAttribute,
+            self.simVertexTextureCoordBuffer.itemSize,
+            GL_FLOAT,
+            False,
+            0,
+            0,
+        )
+
+        glEnableVertexAttribArray(prog.dampingAttribute)
+        glEnableVertexAttribArray(prog.vertexPositionAttribute)
+        glEnableVertexAttribArray(prog.textureCoordAttribute)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.simVertexDampingBuffer.get_id())
+        glVertexAttribPointer(
+            prog.dampingAttribute,
+            self.simVertexDampingBuffer.itemSize,
+            GL_FLOAT,
+            False,
+            0,
+            0,
+        )
+
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, self.renderTexture2.get_id())
+        glUniform1i(prog.samplerUniform, 0)
+        glUniform1f(prog.stepSizeXUniform, 1 / self.weight)
+        glUniform1f(prog.stepSizeYUniform, 1 / self.height)
+
+        self.setMatrixUniforms(prog)
+        glDrawArrays(GL_TRIANGLES, 0, int(self.simVertexPositionBuffer.numItems))
+        glDisableVertexAttribArray(prog.dampingAttribute)
+        glDisableVertexAttribArray(prog.vertexPositionAttribute)
+        glDisableVertexAttribArray(prog.textureCoordAttribute)
+
+        # draw sources
+        for source in self._sources:
+            f = math.sin(time.time() * source.get_freq()) * source.get_amp()
+            glUseProgram(self.shaderProgramDraw.get_id())
+            glVertexAttrib4f(self.shaderProgramDraw.colourAttribute, f, 0, 1, 1)
+
+            glBindBuffer(GL_ARRAY_BUFFER, self.sourceBuffer.get_id())
+            srcCoords = source.get_pos()
+            srcCoords.append(srcCoords[0])
+            srcCoords.append(srcCoords[1] + 1)
+            srcCoords = np.array(srcCoords, dtype=np.float32)
+            glBufferData(GL_ARRAY_BUFFER, srcCoords, GL_STATIC_DRAW)
+            glVertexAttribPointer(
+                self.shaderProgramDraw.vertexPositionAttribute,
+                self.sourceBuffer.itemSize,
+                GL_FLOAT,
+                False,
+                0,
+                0,
+            )
+
+            glEnableVertexAttribArray(self.shaderProgramDraw.vertexPositionAttribute)
+            self.setMatrixUniforms(self.shaderProgramDraw)
+            glDrawArrays(GL_LINES, 0, 2)
+            glDisableVertexAttribArray(self.shaderProgramDraw.vertexPositionAttribute)
+
+        # draw walls
+
+    def on_render(self):
+        # draw_scene
+        glUseProgram(self.shaderProgramMain.get_id())
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glViewport(0, 0, self.weight, self.height)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        self.pMatrix = np.matrix(np.identity(4), np.float32)
+        self.mvMatrix = np.matrix(np.identity(4), np.float32)
+        self.mvMatrixStack.append(self.mvMatrix)
+
+        # draw result
+        glBindBuffer(GL_ARRAY_BUFFER, self.vertexPositionBuffer.get_id())
+        glVertexAttribPointer(
+            self.shaderProgramMain.vertexPositionAttribute,
+            self.vertexPositionBuffer.itemSize,
+            GL_FLOAT,
+            False,
+            0,
+            0,
+        )
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.vertexTextureCoordBuffer.get_id())
+        glVertexAttribPointer(
+            self.shaderProgramMain.textureCoordAttribute,
+            self.vertexTextureCoordBuffer.itemSize,
+            GL_FLOAT,
+            False,
+            0,
+            0,
+        )
+
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, self.renderTexture1.get_id())
+        glUniform1i(self.shaderProgramMain.samplerUniform, 0)
+        glUniform1f(self.shaderProgramMain.brightnessUniform, 1)
+        glUniform3fv(
+            self.shaderProgramMain.coloursUniform,
+            len(self.colourscheme),
+            self.colourscheme,
+        )
+
+        self.setMatrixUniforms(self.shaderProgramMain)
+        glEnableVertexAttribArray(self.shaderProgramMain.vertexPositionAttribute)
+        glEnableVertexAttribArray(self.shaderProgramMain.textureCoordAttribute)
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, self.vertexPositionBuffer.numItems)
+        glDisableVertexAttribArray(self.shaderProgramMain.vertexPositionAttribute)
+        glDisableVertexAttribArray(self.shaderProgramMain.textureCoordAttribute)
+
+        self.mvMatrixStack.pop()
         pygame.display.flip()
 
     def on_cleanup(self):
@@ -243,11 +428,9 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
             self._running = False
 
         # Add sources and walls
-        self.add_source([self.weight / 2, self.height / 2], 5, 100, 50, False)
-        self.add_source(
-            [(self.weight / 2) + 200, (self.height / 2) + 200], 2, 200, 30, False
-        )
-        self.add_wall([300, 300], [100, 300])
+        self.add_source([self.weight / 2, self.height / 2], 1, 10, 50)
+        self.add_source([(self.weight / 2) + 200, (self.height / 2) + 200], 2, 10, 50)
+        self.add_wall([300, 300], [10, 100], 3)
 
         # Run the main loop
         while self._running:
@@ -258,24 +441,25 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
 
         self.on_cleanup()
 
-    def add_drag(self, pos, size):
+    def add_drag(self, pos, size, id):
         # adds a draggable object at position [x,y], of size [width,height]
-        item = item_draggable.Item(pos, size)
-        self._dragitems.append(item.shape())
+        item = item_draggable.Item(pos, size, id)
+        self._dragitems.append(item.hitbox())
 
-    def add_source(self, pos, frequency, wavelength, amplitude, decay):
-        source = Source(pos, [10, 10], frequency, wavelength, amplitude, decay)
+    def add_source(self, pos, id, frequency, amplitude):
+        source = Source(pos, id, frequency, amplitude)
         self._sources.append(source)
-        self.add_drag(pos, [10, 10])
+        self.add_drag(pos, [8, 8], id)
 
-    def add_wall(self, start_pos, end_pos):
-        wall = Wall(start_pos, end_pos)
+    def add_wall(self, pos, size, id):
+        wall = Medium(pos, size, id, 0)
         self._walls.append(wall)
+        self.add_drag(pos, size, id)
 
     def draw_items(self):
         for item in self._dragitems:
             # Convert Pygame rectangle to OpenGL vertices
-            draw = derectify(item[0], (self.weight, self.height))
+            draw = derectify(item, (self.weight, self.height))
             glBegin(GL_LINES)
             for edge in SQUARE_EDGES:
                 for vertex in edge:
@@ -322,7 +506,7 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
                 shader = ShaderSimulate(glCreateProgram())
             case "shaders/simulate-prog-fs.glsl":
                 shader = ShaderSimulate(glCreateProgram())
-            case other:
+            case _:
                 shader = Shader(glCreateProgram())
 
         glAttachShader(shader.get_id(), vert_shader)
@@ -341,6 +525,56 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, +1, +1, +1, -1, -1, +1, -1]
 
         return shader
 
+    def setPosRect(self, x1, y1, x2, y2):
+        points = [x2, y1, x1, y1, x2, y2, x1, y1, x2, y2, x1, y2]
+        for i in range(5):
+            xi = points[i * 2]
+            yi = points[i * 2 + 1]
+            self.simPosition.append(-1 + (2 * xi / self.weight))
+            self.simPosition.append(-1 + (2 * yi / self.height))
+            self.simTextureCoord.append(xi / self.weight)
+            self.simTextureCoord.append(1 - yi / self.height)
+            damp = self.damping
+            if xi == 1 or yi == 1 or xi == self.weight - 1 or yi == self.height - 1:
+                damp = damp * 0.91
+            self.simDamping.append(damp)
+
+    def setMatrixUniforms(self, shader):
+        glUniformMatrix4fv(shader.pMatrixUniform, 1, False, self.pMatrix)
+        glUniformMatrix4fv(shader.mvMatrixUniform, 1, False, self.mvMatrix)
+
+    def initTextureFramebuffer(self):
+        framebuffer = np.empty(1, dtype=np.uint32)
+        glCreateFramebuffers(1, framebuffer)
+        fb = Framebuffer(framebuffer[0])
+        glBindFramebuffer(GL_FRAMEBUFFER, fb.get_id())
+        fb.set_width(self.weight)
+        fb.set_height(self.height)
+
+        texture = np.empty(1, dtype=np.uint32)
+        glCreateTextures(GL_TEXTURE_2D, 1, texture)
+        tx = Texture(int(texture[0]), fb)
+        glBindTexture(GL_TEXTURE_2D, tx.get_id())
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, tx.get_width(), tx.get_height())
+
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx.get_id(), 0
+        )
+
+        status = glCheckFramebufferStatus(GL_FRAMEBUFFER)
+        if status != GL_FRAMEBUFFER_COMPLETE:
+            print(status)
+            return None
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        return tx
+
 
 # Classes used for shader setup
 
@@ -355,6 +589,7 @@ class Shader:
 
         self.pMatrixUniform = None
         self.mvMatrixUniform = None
+        self.nMatrixUniform = None
         self.samplerUniform = None
 
     # Getters
@@ -411,7 +646,6 @@ class Shader:
 class ShaderMain(Shader):
     def __init__(self, id):
         super().__init__(id)
-
         self.brightnessUniform = None
         self.coloursUniform = None
 
@@ -419,7 +653,6 @@ class ShaderMain(Shader):
 class ShaderSimulate(Shader):
     def __init__(self, id):
         super().__init__(id)
-
         self.stepSizeXUniform = None
         self.stepSizeYUniform = None
 
@@ -428,7 +661,88 @@ class ShaderSimulate(Shader):
 
 
 class Buffer:
-    pass
+    def __init__(self, id):
+        self.id = id
+        self.itemSize = None
+        self.numItems = None
+
+    # Getters
+    def get_id(self):
+        return self.id
+
+    def get_itemSize(self):
+        return self.itemSize
+
+    def get_numItems(self):
+        return self.numItems
+
+    # Setters
+    def set_id(self, id):
+        self.id = id
+
+    def set_itemSize(self, itemSize):
+        self.itemSize = itemSize
+
+    def set_numItems(self, numItems):
+        self.numItems = numItems
+
+
+class Texture:
+    def __init__(self, id, framebuffer=None):
+        self.id = id
+        self.framebuffer = framebuffer
+        self.width = 0
+        self.height = 0
+        if framebuffer:
+            self.width = framebuffer.get_width()
+            self.height = framebuffer.get_height()
+
+    # Getters
+    def get_id(self):
+        return self.id
+
+    def get_width(self):
+        return self.width
+
+    def get_height(self):
+        return self.height
+
+    # Setters
+    def set_id(self, id):
+        self.id = id
+
+    def set_width(self, width):
+        self.width = width
+
+    def set_height(self, height):
+        self.height = height
+
+
+class Framebuffer:
+    def __init__(self, id, width=0, height=0):
+        self.id = id
+        self.width = width
+        self.height = height
+
+    # Getters
+    def get_id(self):
+        return self.id
+
+    def get_width(self):
+        return self.width
+
+    def get_height(self):
+        return self.height
+
+    # Setters
+    def set_id(self, id):
+        self.id = id
+
+    def set_width(self, width):
+        self.width = width
+
+    def set_height(self, height):
+        self.height = height
 
 
 if __name__ == "__main__":

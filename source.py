@@ -4,6 +4,7 @@ from item_draggable import Item
 class Source(Item):
     def __init__(self, pos, id, frequency, amplitude, size=8):
         super().__init__(pos, size, id)
+        self._position = pos
         self._freq = frequency
         self._amp = amplitude
         self._zerot = 0

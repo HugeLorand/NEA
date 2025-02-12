@@ -1,4 +1,5 @@
 import pygame
+import numpy as np
 
 
 def rectify(corners, displaysize):
@@ -37,3 +38,19 @@ def derectify(rect, displaysize):
         for corner in corners
     ]
     return [((corner[0]), (corner[1]), 0) for corner in corners]
+
+
+def invmat(matrix):
+    # check if the matrix is square
+    if matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("The matrix must be square")
+    # check if the determinant of the matrix is zero
+    if np.linalg.det(matrix) == 0:
+        raise ValueError("Determinant of the matrix is zero")
+    # return the inverse of the matrix
+    return np.linalg.inv(matrix)
+
+
+def mat4tomat3(matrix):
+    # drop the last row and column
+    return matrix[:3, :3]
