@@ -3,11 +3,11 @@ import numpy as np
 
 
 def rectify(corners, displaysize):
-    """
-    Convert normalized OpenGL corners into a pygame.Rect.
-    `corners` is a list of two (x, y) tuples in normalized OpenGL coordinates.
-    `displaysize` is the size of the display (width, height).
-    """
+
+    # Convert normalized OpenGL corners into a pygame.Rect object
+    # `corners` is a list of two (x, y) tuples in normalized OpenGL coordinates.
+    # `displaysize` is the size of the display (width, height).
+
     # Convert normalized OpenGL coordinates to pixel coordinates
     x1 = (corners[0][0] + 1) * (displaysize[0] / 2)
     y1 = (corners[0][1] + 1) * (displaysize[1] / 2)
@@ -26,18 +26,27 @@ def rectify(corners, displaysize):
 
 def derectify(rect, displaysize):
     # Convert Pygame Rect to array of coordinates
-    corners = [
-        (rect[0], rect[1]),  # Top-left
-        (rect[0] + rect[2], rect[1]),  # Top-right
-        (rect[0], rect[1] + rect[3]),  # Bottom-left
-        (rect[0] + rect[2], rect[1] + rect[3]),  # Bottom-right
-    ]
-    # Normalise coordinates so they can be used by OpenGL
-    corners = [
-        (2 * corner[0] / displaysize[0] - 1, 2 * corner[1] / displaysize[1] - 1)
-        for corner in corners
-    ]
-    return [((corner[0]), (corner[1]), 0) for corner in corners]
+    match len(rect):
+        case 2:
+            return (
+                (2 * rect[0] / displaysize[0]) - 1,
+                (2 * rect[1] / displaysize[1]) - 1,
+            )
+        case 4:
+            corners = [
+                (rect[0], rect[1]),  # Top-left
+                (rect[0] + rect[2], rect[1]),  # Top-right
+                (rect[0], rect[1] + rect[3]),  # Bottom-left
+                (rect[0] + rect[2], rect[1] + rect[3]),  # Bottom-right
+            ]
+            # Normalise coordinates so they can be used by OpenGL
+            corners = [
+                (2 * corner[0] / displaysize[0] - 1, 2 * corner[1] / displaysize[1] - 1)
+                for corner in corners
+            ]
+            return [((corner[0]), (corner[1]), 0) for corner in corners]
+        case _:
+            raise ValueError("Coord or Rect must have 2 or 4 elements")
 
 
 def invmat(matrix):
