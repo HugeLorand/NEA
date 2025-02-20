@@ -9,7 +9,6 @@ from gl_classes import *
 from source import Source
 from medium import Medium
 import math
-import time
 import numpy as np
 
 
@@ -19,7 +18,7 @@ class App:
         self.displaySurface = None  # This is the display surface for PyGame
         self.size = self.width, self.height = 1080, 1080  # This is the window size
         self.windowOffset = (
-            10  # This is the offset of the window from the edge of the screen
+            40  # This is the offset of the window from the edge of the screen
         )
         self.caption = title  # This is the window title
         self.dragItems = []  # This is a list of all draggable items
@@ -33,9 +32,7 @@ class App:
             0,
         ]  # This is the offset of the mouse from the top left corner of the selected item
         self.clock = pygame.time.Clock()  # This is the PyGame clock
-        self.startTime = (
-            time.time()
-        )  # This is the time the simulation started (can change in order to prevent issues when items are added or moved)
+        self.startTime = 0  # This is the time the simulation started (can change in order to prevent issues when items are added or moved)
         self.wavelength = 10  # This is the simulation wavelength
         self.waveTexture = None  # This is the OpenGL texture for the wave simulation
         self.damping = 1.0  # This is the damping factor for the simulation
@@ -271,8 +268,8 @@ class App:
             if (
                 self.selected is not None
             ):  # selected can be `0` so `is not None` is required, which is more efficient than "!="
-                self.dragItems[self.selected][0].x = event.pos[0] + self.offset[0]
-                self.dragItems[self.selected][0].y = event.pos[1] + self.offset[1]
+                self.dragItems[self.selected][0] = event.pos[0] + self.offset[0]
+                self.dragItems[self.selected][1] = event.pos[1] + self.offset[1]
 
     def on_loop(self):
         # update the simulation at a framerate of 144 fps
@@ -343,16 +340,22 @@ class App:
         glDisableVertexAttribArray(prog.vertexPositionAttribute)
         glDisableVertexAttribArray(prog.textureCoordAttribute)
 
+        srcCoords = []
+
         # draw sources
         for source in self.sources:
-            f = math.sin(time.time() * source.get_freq()) * source.get_amp()
+            self.prep_draw()
+            f = (
+                math.sin(self.clock.get_rawtime() * source.get_freq())
+                * source.get_amp()
+            )
             glUseProgram(self.shaderProgramDraw.get_id())
             glVertexAttrib4f(self.shaderProgramDraw.colourAttribute, f, 0, 1, 1)
 
             glBindBuffer(GL_ARRAY_BUFFER, self.sourceBuffer.get_id())
             srcCoords = list(derectify(source.get_pos(), self.size))
             srcCoords.append(srcCoords[0])
-            srcCoords.append(srcCoords[1] + 1)
+            srcCoords.append((srcCoords[1]) + 1)
             srcCoords = np.array(srcCoords, dtype=np.float32)
             glBufferData(GL_ARRAY_BUFFER, srcCoords, GL_STATIC_DRAW)
             glVertexAttribPointer(
@@ -368,11 +371,38 @@ class App:
             self.setMatrixUniforms(self.shaderProgramDraw)
             glDrawArrays(GL_LINES, 0, 4)
             glDisableVertexAttribArray(self.shaderProgramDraw.vertexPositionAttribute)
+            # pygame
 
         # draw walls
 
+        for wall in self.walls:
+            self.prep_draw()
+            glBindBuffer(GL_ARRAY_BUFFER, self.sourceBuffer.get_id())
+            # draw line back on itself, or else one endpoint won't be drawn
+            WallCoords = derectify(wall.get_rect(), self.size)
+            glLineWidth(1.5)
+            glBufferData(
+                GL_ARRAY_BUFFER, np.array(WallCoords, dtype=np.float32), GL_STATIC_DRAW
+            )
+            glVertexAttribPointer(
+                self.shaderProgramDraw.vertexPositionAttribute,
+                self.sourceBuffer.itemSize,
+                GL_FLOAT,
+                GL_FALSE,
+                0,
+                False,
+            )
+
+            self.setMatrixUniforms(self.shaderProgramDraw)
+            glEnableVertexAttribArray(self.shaderProgramDraw.vertexPositionAttribute)
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 6)
+            glDisableVertexAttribArray(self.shaderProgramDraw.vertexPositionAttribute)
+
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE)
+            glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
     def on_render(self):
-        # draw_scene
+        print("Starting render")
         glUseProgram(self.shaderProgramMain.get_id())
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         glViewport(0, 0, self.width, self.height)
@@ -422,6 +452,7 @@ class App:
 
         self.mvMatrixStack.pop()
         pygame.display.flip()
+        print("Render complete")
 
     def on_cleanup(self):
         pygame.quit()
@@ -459,21 +490,20 @@ class App:
         self.walls.append(wall)
         self.add_drag(pos, size, id)
 
-    def draw_items(self):
-        for item in self.dragItems:
-            # Convert Pygame rectangle to OpenGL vertices
-            draw = derectify(item, (self.width, self.height))
-            glBegin(GL_LINES)
-            for edge in SQUARE_EDGES:
-                for vertex in edge:
-                    glVertex3fv(draw[vertex])  # Use normalized coordinates
-            glEnd()
+    def prep_draw(self):
+        rttFramebuffer = self.renderTexture1.framebuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, rttFramebuffer.get_id())
+        glViewport(0, 0, rttFramebuffer.width, rttFramebuffer.height)
+        glUseProgram(self.shaderProgramDraw.get_id())
+
+        # blue channel used for walls and media
+        glColorMask(False, False, True, False)
+        glVertexAttrib4f(self.shaderProgramDraw.colourAttribute, 0.0, 0.0, 0.0, 1.0)
 
     def load_shader(self, shader_file):
         f = open(shader_file, "r")
         shader_source = f.read()
         if shader_source:
-
             if "fs" in shader_file:
                 shader = compileShader(shader_source, GL_FRAGMENT_SHADER)
             elif "vs" in shader_file:
@@ -482,8 +512,11 @@ class App:
                 return None
 
             glCompileShader(shader)
+            if not glGetShaderiv(shader, GL_COMPILE_STATUS):
+                print(
+                    f"Shader compile error in {shader_file}: {glGetShaderInfoLog(shader)}"
+                )
             return shader
-
         else:
             print("Shader not found")
             return None
@@ -526,10 +559,15 @@ class App:
         shader.mvMatrixUniform = glGetUniformLocation(shader.get_id(), "uMVMatrix")
         shader.samplerUniform = glGetUniformLocation(shader.get_id(), "uSampler")
 
+        if not glGetShaderiv(frag_shader, GL_COMPILE_STATUS):
+            print("Fragment shader compile error:", glGetShaderInfoLog(frag_shader))
+        if not glGetShaderiv(vert_shader, GL_COMPILE_STATUS):
+            print("Vertex shader compile error:", glGetShaderInfoLog(vert_shader))
+
         return shader
 
     def setPosRect(self, x1, y1, x2, y2):
-        points = [x2, y1, x1, y1, x2, y2, x1, y1, x2, y2, x1, y2]
+        points = derectify([x2, y1, x1, y1, x2, y2, x1, y1, x2, y2, x1, y2], self.size)
         for i in range(5):
             xi = points[i * 2]
             yi = points[i * 2 + 1]
@@ -570,8 +608,10 @@ class App:
 
         status = glCheckFramebufferStatus(GL_FRAMEBUFFER)
         if status != GL_FRAMEBUFFER_COMPLETE:
-            print(status)
+            print(f"Framebuffer error: {status}")
             return None
+        else:
+            print("Framebuffer initialized successfully")
 
         glBindTexture(GL_TEXTURE_2D, 0)
         glBindFramebuffer(GL_FRAMEBUFFER, 0)

@@ -27,11 +27,6 @@ def rectify(corners, displaysize):
 def derectify(rect, displaysize):
     # Convert Pygame Rect to array of coordinates
     match len(rect):
-        case 2:
-            return (
-                (2 * rect[0] / displaysize[0]) - 1,
-                (2 * rect[1] / displaysize[1]) - 1,
-            )
         case 4:
             corners = [
                 (rect[0], rect[1]),  # Top-left
@@ -46,7 +41,10 @@ def derectify(rect, displaysize):
             ]
             return [((corner[0]), (corner[1]), 0) for corner in corners]
         case _:
-            raise ValueError("Coord or Rect must have 2 or 4 elements")
+            corners = rect
+            for c in range(len(rect)):
+                corners[c] = (2 * corners[c] / displaysize[c % 2]) - 1
+            return corners
 
 
 def invmat(matrix):
@@ -63,3 +61,29 @@ def invmat(matrix):
 def mat4tomat3(matrix):
     # drop the last row and column
     return matrix[:3, :3]
+
+
+def thickLinePoints(arr, thick):
+    result = []
+    ax = 0
+    ay = 0
+    for i in range(len(arr) - 2, 0, 2):
+        dx = arr[i + 2] - arr[i]
+        dy = arr[i + 3] - arr[i + 1]
+        dl = np.sqrt(dx**2 + dy**2)
+
+        if dl > 0:
+            mult = thick / dl
+            ax = mult * dy
+            ay = -mult * dx
+
+        result.append(arr[i] + ax)
+        result.append(arr[i + 1] + ay)
+        result.append(arr[i] - ax)
+        result.append(arr[i + 1] + ay)
+
+    result.append(arr[i] + ax)
+    result.append(arr[i + 1] + ay)
+    result.append(arr[i] - ax)
+    result.append(arr[i + 1] + ay)
+    return result
