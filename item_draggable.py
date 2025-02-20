@@ -1,11 +1,11 @@
 import pygame
 
-class Item():
-    def __init__(self,pos,size,color):
-        self._position = pos
+
+class Item:
+    def __init__(self, pos, size, id):
+        self._pos = pos
         self._size = size
-        self._rect = pygame.Rect(pos[0],pos[1],size[0],size[1])
-        self._color = color
-    def shape(self):
-        return [self._rect, self._color]
-    
+        self._id = id
+
+    def hitbox(self):
+        return pygame.Rect(self._pos[0], self._pos[1], self._size[0], self._size[1])
