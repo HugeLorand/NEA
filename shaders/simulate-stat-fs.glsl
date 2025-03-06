@@ -1,7 +1,7 @@
-#version 450
+#version 330 core
 
 in vec2 vTexCoord;
-in vec4 vPosition;
+in vec4 vPos;
 in float vDamping;
 
 uniform sampler2D uSampler;

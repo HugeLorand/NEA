@@ -1,4 +1,4 @@
-#version 450
+#version 330 core
 
 in vec2 vTexCoord;
 in vec4 vPos;
@@ -40,5 +40,5 @@ void main()
         		newdisp = disp+newvel;
         }
 		// update displacement and velocity
-        FragColor = vec4(newdisp, newvel, pv.b, 1.);
+        FragColor = vec4(newdisp, newvel, pv.b, 1.0);
 }

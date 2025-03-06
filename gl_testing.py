@@ -2,6 +2,7 @@ import pygame as pg
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
 import numpy as np
+from main import Framebuffer, Texture
 
 
 def create_shader(vertex_filepath: str, fragment_filepath: str) -> int:
@@ -191,5 +192,45 @@ class Triangle:
 if __name__ == "__main__":
 
     my_app = App()
+
+    framebuffer = np.empty(1, dtype=np.uint32)
+    glCreateFramebuffers(1, framebuffer)
+    fb = Framebuffer(framebuffer[0])
+    glBindFramebuffer(GL_FRAMEBUFFER, fb.get_id())
+    fb.set_width(1024)
+    fb.set_height(1024)
+
+    rtt = np.empty(1, dtype=np.uint32)
+    glCreateTextures(GL_TEXTURE_2D, 1, rtt)
+    rtt = Texture(int(rtt[0]), fb)
+    glBindTexture(GL_TEXTURE_2D, rtt.get_id())
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rtt.get_id(), 0
+    )
+    print(GL_MAX_FRAMEBUFFER_SAMPLES)
+    emptysize = 4 * 1024 * 1024
+    empty = bytes(emptysize)
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        rtt.width,
+        rtt.height,
+        0,
+        GL_RGBA,
+        GL_FLOAT,
+        0,
+    )
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, rtt.get_width(), rtt.get_height())
+
+    glBindTexture(GL_TEXTURE_2D, 0)
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
     my_app.run()
     my_app.quit()

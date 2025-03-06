@@ -1,4 +1,4 @@
-#version 450
+#version 330 core
 
 #define TS_COL_WALL 0
 #define TS_COL_POS 1

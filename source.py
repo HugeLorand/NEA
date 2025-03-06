@@ -2,7 +2,7 @@ from item_draggable import Item
 
 
 class Source(Item):
-    def __init__(self, pos, id, frequency, amplitude, size=8):
+    def __init__(self, pos, id, frequency, amplitude, size=[8, 8]):
         super().__init__(pos, size, id)
         self._position = pos
         self._freq = frequency
@@ -17,6 +17,12 @@ class Source(Item):
 
     def get_freq(self):
         return self._freq
+
+    def get_centre(self):
+        centre = self.get_pos()
+        centre[0] += 4
+        centre[1] -= 4
+        return centre
 
     def set_pos(self, pos):
         self._position = pos

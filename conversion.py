@@ -39,12 +39,9 @@ def derectify(rect, displaysize):
                 (2 * corner[0] / displaysize[0] - 1, 2 * corner[1] / displaysize[1] - 1)
                 for corner in corners
             ]
-            return [((corner[0]), (corner[1]), 0) for corner in corners]
+            return [((corner[0]), (corner[1]), 0.0) for corner in corners]
         case _:
-            corners = rect
-            for c in range(len(rect)):
-                corners[c] = (2 * corners[c] / displaysize[c % 2]) - 1
-            return corners
+            return [2 * rect[c] / displaysize[c % 2] - 1 for c in range(len(rect))]
 
 
 def invmat(matrix):
