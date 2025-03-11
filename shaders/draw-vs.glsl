@@ -1,16 +1,16 @@
 #version 450
 
-layout (location = 0) in vec3 aVPos;
-layout (location = 1) in vec4 aColour;
+layout (location = 0) in vec3 PosIN;
+layout (location = 1) in vec4 ColIN;
 
-uniform mat4 uMVMatrix;
-uniform mat4 uPMatrix;
+uniform mat4 mvMatrix;
+uniform mat4 pMatrix;
 
-out vec4 vPos;
-out vec4 vColour;
+out vec4 PosOUT;
+out vec4 ColOUT;
 
 void main(void) {
-    vPos = uMVMatrix * vec4(aVPos, 1.0);
-    gl_Position = uPMatrix * vPos;
-    vColour = aColour;
+    PosOUT = mvMatrix * vec4(PosIN, 1.0);
+    gl_Position = pMatrix * PosOUT;
+    ColOUT = ColIN;
 }

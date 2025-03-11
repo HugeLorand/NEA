@@ -1,20 +1,20 @@
 #version 450
 
-layout (location = 0) in vec3 aVPos;
-layout (location = 1) in vec2 aTexCoord;
-layout (location = 2) in float aDamping;
+layout (location = 0) in vec3 PosIN;
+layout (location = 1) in vec2 TexCoordIN;
+layout (location = 2) in float DampingIN;
 
-uniform mat4 uMVMatrix;
-uniform mat4 uPMatrix;
+uniform mat4 mvMatrix;
+uniform mat4 pMatrix;
 
-out vec2 vTexCoord;
-out vec4 vPos;
-out float vDamping;
+out vec4 PosOUT;
+out vec2 TexCoordOUT;
+out float DampingOUT;
 
 
 void main(void) {
-    vPos = uMVMatrix * vec4(aVPos, 1.0);
-    gl_Position = uPMatrix * vPos;
-    vTexCoord = aTexCoord;
-    vDamping = aDamping;
+    PosOUT = mvMatrix * vec4(PosIN, 1.0);
+    gl_Position = pMatrix * PosOUT;
+    TexCoordOUT = TexCoordIN;
+    DampingOUT = DampingIN;
 }
