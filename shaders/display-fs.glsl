@@ -10,19 +10,19 @@
 #define TS_COL_SOURCE 7
 #define TS_COL_COUNT  9
 
-    in vec2 vTexCoord;
-    in vec4 vPos;
+in vec2 vTexCoord;
+in vec4 vPos;
 
-    uniform sampler2D uSampler;
-    uniform float brightness;
-    uniform lowp vec3 colours[TS_COL_COUNT];
+uniform sampler2D sampler;
+uniform float brightness;
+uniform lowp vec3 colours[TS_COL_COUNT];
 
-	out vec4 FragColor;
+out vec4 FragColor;
 
 	// shader for displaying waves on screen
     void main(void) {
         float alpha = 1.0;
-        vec4 texColour = texture2D(uSampler, vec2(vTexCoord.s, vTexCoord.t));
+        vec4 texColour = texture2D(sampler, vec2(vTexCoord.s, vTexCoord.t));
 
 		// blue channel used to store walls/media
 		float med = texColour.b;

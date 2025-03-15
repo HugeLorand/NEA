@@ -1,6 +1,8 @@
 class Shader:
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, p_id, f_id=0, v_id=0):
+        self.pid = p_id
+        self.fid = f_id
+        self.vid = v_id
         self.vertexPositionAttribute = None
         self.textureCoordAttribute = None
         self.dampingAttribute = None
@@ -8,12 +10,17 @@ class Shader:
 
         self.pMatrixUniform = None
         self.mvMatrixUniform = None
-        self.nMatrixUniform = None
         self.samplerUniform = None
 
     # Getters
-    def get_id(self):
-        return self.id
+    def get_fid(self):
+        return self.fid
+
+    def get_vid(self):
+        return self.vid
+
+    def get_pid(self):
+        return self.pid
 
     def get_vertexPositionAttribute(self):
         return self.vertexPositionAttribute
@@ -37,8 +44,14 @@ class Shader:
         return self.samplerUniform
 
     # Setters
-    def set_id(self, id):
-        self.id = id
+    def set_fid(self, f_id):
+        self.fid = f_id
+
+    def set_vid(self, v_id):
+        self.vid = v_id
+
+    def set_pid(self, p_id):
+        self.pid = p_id
 
     def set_vertexPositionAttribute(self, vertexPositionAttribute):
         self.vertexPositionAttribute = vertexPositionAttribute
@@ -63,15 +76,17 @@ class Shader:
 
 
 class ShaderMain(Shader):
-    def __init__(self, id):
-        super().__init__(id)
+
+    def __init__(self, p_id, f_id=0, v_id=0):
+        super().__init__(p_id, f_id, v_id)
         self.brightnessUniform = None
         self.coloursUniform = None
 
 
 class ShaderSimulate(Shader):
-    def __init__(self, id):
-        super().__init__(id)
+
+    def __init__(self, p_id, f_id=0, v_id=0):
+        super().__init__(p_id, f_id, v_id)
         self.stepSizeXUniform = None
         self.stepSizeYUniform = None
 
@@ -112,6 +127,7 @@ class Texture:
         self.framebuffer = framebuffer
         self.width = 0
         self.height = 0
+        # Technically, the size of the framebuffer should depend on the size of the texutre. However, due to the order in which they are initialised, this has to be done to achieve the same outcome
         if framebuffer:
             self.width = framebuffer.get_width()
             self.height = framebuffer.get_height()
