@@ -128,10 +128,9 @@ class App:
                 self._display_surf, Color(255, 0, 0), Rect(item.get_pos(), (8, 8))
             )
         for item in self.walls:
+            coords = item.get_rotated()
             pygame.draw.lines(
-                self._display_surf,
-                Color(0, 0, 255),
-                item.get_rotated(),
+                self._display_surf, Color(0, 0, 255), True, coords, width=5
             )
         self.masterSurface.blit(self._display_surf, (0, 0))
         self.inputsSurface.fill(Color(220, 220, 220))
@@ -148,7 +147,7 @@ class App:
         # adds a source in the centre of the screen with placeholder values
         self.add_source([self.weight / 2, self.height / 2], 10, 1)
         self.add_source([(self.weight / 2) + 50, (self.height / 2) + 50], 10, 1)
-        self.add_wall([50, 50], [300, 10], 0)
+        self.add_wall([250, 550], [300, 10], 180)
 
         while self._running:
             for event in pygame.event.get():
@@ -213,7 +212,8 @@ class App:
             sliderW = ["Width", 1, 300, item.get_size()[0]]
             sliderH = ["Height", 1, 300, item.get_size()[1]]
             sliderN = ["Refractive Index", 0, 1, item.get_refractive_index()]
-            return [sliderW, sliderH, sliderN]
+            sliderR = ["Rotation", 0, 360, item.get_rot()]
+            return [sliderW, sliderH, sliderN, sliderR]
         else:
             return
 
