@@ -20,6 +20,24 @@ class App:
         self.sources = []  # List of all sources
         self.mediums = []  # List of all walls
 
+        self._running = True
+        self.inputsSurface = None
+        self.dataSurface = None
+        self._display_surf = None
+        self.masterSurface = None
+        self.dragItems = []
+        self.numDragItems = 0
+        self.sources = []
+        self.walls = []
+        self._selected = None
+        self.active = 0
+        self._offset = [0, 0]
+        self._clock = pygame.time.Clock()
+        self.sliders = []
+        self.actionstack = []
+        self.actionstackpointer = 0
+        self.tect = None
+
         self.selected = None  # Index of the item selected by the user using the mouse
         self.offset = [
             0,
@@ -90,20 +108,22 @@ class App:
 
     def on_init(self):
         pygame.init()
-        # set up the display
-        self.simDisplaySurface = pygame.display.set_mode(
-            self.size, pygame.DOUBLEBUF | pygame.OPENGL
+        self.masterSurface = pygame.display.set_mode(
+            (self.weight + 300, self.height + 200)
         )
-        # version check
-        pygame.display.gl_set_attribute(GL_CONTEXT_MAJOR_VERSION, 4)
-        pygame.display.gl_set_attribute(GL_CONTEXT_MINOR_VERSION, 0)
-        pygame.display.gl_set_attribute(
-            pygame.GL_CONTEXT_PROFILE_MASK, GL_CONTEXT_PROFILE_CORE
+        self._display_surf = pygame.Surface(self._size)
+        self.dataSurface = pygame.Surface((self.weight + 300, 200))
+        self.inputsSurface = pygame.Surface((300, self.height))
+        self.masterSurface.blits(
+            [
+                (self._display_surf, (0, 0)),
+                (self.dataSurface, (0, self.height)),
+                (self.inputsSurface, (self.weight, 0)),
+            ]
         )
-        # Set up the OpenGL context and gives the window a title
-        self.caption = pygame.display.set_caption(self.caption)
-        gluPerspective(45, (self.width / self.height), 0.1, 50.0)
-        self.running = True
+        self._running = True
+        pygame.font.init()
+        self.text = pygame.font.SysFont("calibri", 15)
 
         # initialise shaders
 
@@ -278,29 +298,76 @@ class App:
 
         # on click, use collision detection to determine which, if any, object from dragItems is selected
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                for index, item in enumerate(self.dragItems):
+            for index, item in enumerate(self.dragItems):
+                try:
                     if item.collidepoint(event.pos):
-                        # selects item
-                        self.selected = index
-                        mouse_x, mouse_y = event.pos
-                        self.offset[0] = item.x - mouse_x
-                        self.offset[1] = item.y - mouse_y
+                        for source in self.sources:
+                            if source.get_id() == index:
+                                self.sliders = self.get_sliders(source)
+                        for wall in self.walls:
+                            if wall.get_id() == index:
+                                self.sliders = self.get_sliders(wall)
+
+                        if event.button == 1:
+                            # if left clicked, select item and get its initial coordinates
+                            self._selected = index
+                            self.active = index
+                            self.add_action(
+                                ["m", (item.x, item.y), (0, 0), self._selected]
+                            )
+
+                            mouse_x, mouse_y = event.pos
+                            self._offset[0] = item.x - mouse_x
+                            self._offset[1] = item.y - mouse_y
+                except:
+                    pass
 
         # on click stop, deselect item
         elif event.type == pygame.MOUSEBUTTONUP:
             # deselects item
             if event.button == 1:
-                self.selected = None
+                self._selected = None
+                try:
+                    self.actionstack[self.actionstackpointer - 1][2] = tuple(
+                        [x + y for x, y in zip(event.pos, self._offset)]
+                    )
+                except:
+                    pass
 
         # while mouse moving, if an item from dragItems is selected, move it along with the mouse
         elif event.type == pygame.MOUSEMOTION:
+
             # moves selected item
             if (
-                self.selected is not None
+                self._selected is not None
             ):  # selected can be `0` so `is not None` is required, which is more efficient than "!="
-                self.dragItems[self.selected][0] = event.pos[0] + self.offset[0]
-                self.dragItems[self.selected][1] = event.pos[1] + self.offset[1]
+                # moves selected item
+                position = (
+                    min(max(0, event.pos[0] + self._offset[0]), self.weight - 8),
+                    min(max(0, event.pos[1] + self._offset[1]), self.height - 8),
+                )
+                self.move_item(self._selected, position)
+            else:
+                self._offset = list(event.pos)
+
+        elif event.type == pygame.KEYDOWN:
+            match event.key:
+                case pygame.K_s:
+                    self.add_source(self._offset, 10, 1)
+                    self.add_action(
+                        ["c", [self._offset], "s", self.sources[-1:][0].get_id()]
+                    )
+                case pygame.K_z:
+                    self.undo()
+                case pygame.K_x:
+                    self.redo()
+                case pygame.K_w:
+                    self.add_wall(self._offset, (100, 50), 0)
+                    self.add_action(
+                        ["c", [self._offset], "w", self.walls[-1:][0].get_id()]
+                    )
+                case _:
+                    pass
 
     def on_loop(self):
         # update the simulation at an uncapped framerate
@@ -465,6 +532,11 @@ class App:
         glDisableVertexAttribArray(self.displayShader.vertexPositionAttribute)
         glDisableVertexAttribArray(self.displayShader.textureCoordAttribute)
 
+        self.masterSurface.blit(self._display_surf, (0, 0))
+        self.inputsSurface.fill(Color(220, 220, 220))
+        self.draw_sliders()
+        self.masterSurface.blit(self.inputsSurface, (self.weight, 0))
+
         pygame.display.flip()
 
     def on_cleanup(self):
@@ -472,14 +544,13 @@ class App:
 
     def on_execute(self):
         if self.on_init() == False:
-            self.running = False
+            self._running = False
+        # adds a source in the centre of the screen with placeholder values
+        self.add_source([self.weight / 2, self.height / 2], 10, 1)
+        self.add_source([(self.weight / 2) + 50, (self.height / 2) + 50], 10, 1)
+        self.add_wall([250, 550], [300, 10], 180)
 
-        # Add starter source and wall
-        self.add_source([self.width / 2, self.height / 2], 1, 10, 1)
-        self.add_wall([300, 300], [10, 100], 3)
-
-        # Run the main loop
-        while self.running:
+        while self._running:
             for event in pygame.event.get():
                 self.on_event(event)
             self.on_loop()
@@ -651,6 +722,137 @@ class App:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         return self.rtt
+
+    def draw_sliders(self):
+
+        totalcount = len(self.sliders)
+        for count in range(totalcount):
+            slider = self.sliders[count]
+            name = slider[0]
+            min = slider[1]
+            max = slider[2]
+            val = slider[3]
+            tall = ((self.height / totalcount) * 0.5 * (count + 1)) + self.height / 4
+            pygame.draw.circle(
+                self.inputsSurface,
+                Color(120, 120, 120),
+                (val / (max - min) * 220 + 40, tall),
+                5,
+            )
+            pygame.draw.line(
+                self.inputsSurface,
+                Color(120, 120, 120),
+                (
+                    40,
+                    tall,
+                ),
+                (260, tall),
+                3,
+            )
+            box = [x / 2 for x in self.text.size(name)]
+            pos = [150 - box[0], tall - box[1] + 15]
+            text = self.text.render(name, False, Color(0, 0, 0))
+            self.inputsSurface.blit(text, pos)
+
+            min = str(min)
+            max = str(max)
+            box = [x / 2 for x in self.text.size(min)]
+            pos = [40 - box[0], tall - box[1] + 15]
+            text = self.text.render(min, True, Color(0, 0, 0))
+            self.inputsSurface.blit(text, pos)
+            box = [x / 2 for x in self.text.size(max)]
+            pos = [260 - box[0], tall - box[1] + 15]
+            text = self.text.render(max, True, Color(0, 0, 0))
+            self.inputsSurface.blit(text, pos)
+
+    def get_sliders(self, item):
+        if isinstance(item, Source):
+            sliderA = ["Amplitude", 0, 1, item.get_amp()]
+            sliderF = ["Frequency", 1, 100, item.get_freq()]
+            return [sliderA, sliderF]
+        if isinstance(item, Medium):
+            sliderW = ["Width", 1, 300, item.get_size()[0]]
+            sliderH = ["Height", 1, 300, item.get_size()[1]]
+            sliderN = ["Refractive Index", 0, 1, item.get_refractive_index()]
+            sliderR = ["Rotation", 0, 360, item.get_rot()]
+            return [sliderW, sliderH, sliderN, sliderR]
+        else:
+            return
+
+    def undo(self):
+        if self.actionstackpointer < 1:
+            return
+        else:
+            try:
+                action = self.actionstack[self.actionstackpointer - 1]
+            except:
+                return
+            match action[0]:
+                case "m":
+                    self.move_item(action[3], action[1])
+                case "c":
+                    self.dragItems[action[3]] = None
+                    match action[2]:
+                        case "s":
+                            for source in self.sources:
+                                if source.get_id() == action[3]:
+                                    self.sources.remove(source)
+                                    del source
+                        case "w":
+                            for wall in self.walls:
+                                if wall.get_id() == action[3]:
+                                    self.walls.remove(wall)
+                                    del wall
+
+                case "d":
+                    # create item
+                    pass
+                case _:
+                    pass
+            self.actionstackpointer -= 1
+
+    def redo(self):
+        if self.actionstackpointer == len(self.actionstack):
+            return
+        else:
+            try:
+                action = self.actionstack[self.actionstackpointer]
+            except:
+                return
+            match action[0]:
+                case "m":
+                    self.move_item(action[3], action[2])
+                case "c":
+                    # create item
+                    pass
+                case "d":
+                    self.dragItems[action[3]] = None
+                    for source in self.sources:
+                        if source.get_id() == action[3]:
+                            self.sources.remove(source)
+                            del source
+                    pass
+                case _:
+                    pass
+            self.actionstackpointer += 1
+
+    def add_action(self, action):
+        if self.actionstackpointer == len(self.actionstack):
+            self.actionstack.append(action)
+        else:
+            self.actionstack[self.actionstackpointer] = action
+            self.actionstack = self.actionstack[: self.actionstackpointer + 1]
+        self.actionstackpointer += 1
+
+    def move_item(self, item, position):
+        self.dragItems[item].x, self.dragItems[item].y = position
+        for source in self.sources:
+            if source.get_id() == item:
+                source.set_pos(position)
+
+        for wall in self.walls:
+            if wall.get_id() == item:
+                wall.set_pos(position)
 
 
 if __name__ == "__main__":
