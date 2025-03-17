@@ -8,36 +8,32 @@ from gl_classes import *
 from sim_classes import *
 import numpy as np
 
+TITLE = "Wave Sim"
+
 
 class App:
     def __init__(self, title):
         self.running = True  # Flag for main loop
-        self.simDisplaySurface = None  # Display surface for PyGame
         self.size = self.width, self.height = 1024, 1024  # Window size
         self.windowOffset = 0.04  # Offset of the window from the edge of the screen
-        self.caption = title  # Window title
+        self.caption = TITLE  # Window title
         self.dragItems = []  # List of all draggable items
         self.sources = []  # List of all sources
         self.mediums = []  # List of all walls
+        self.numDragItems = 0
 
-        self._running = True
         self.inputsSurface = None
         self.dataSurface = None
-        self._display_surf = None
+        self.simDisplaySurface = None
         self.masterSurface = None
-        self.dragItems = []
-        self.numDragItems = 0
-        self.sources = []
-        self.walls = []
-        self._selected = None
-        self.active = 0
+
         self._offset = [0, 0]
         self._clock = pygame.time.Clock()
         self.sliders = []
         self.actionstack = []
         self.actionstackpointer = 0
-        self.tect = None
-
+        self.text = None
+        self.active = 0
         self.selected = None  # Index of the item selected by the user using the mouse
         self.offset = [
             0,
@@ -109,19 +105,19 @@ class App:
     def on_init(self):
         pygame.init()
         self.masterSurface = pygame.display.set_mode(
-            (self.weight + 300, self.height + 200)
+            (self.width + 300, self.height + 200)
         )
-        self._display_surf = pygame.Surface(self._size)
-        self.dataSurface = pygame.Surface((self.weight + 300, 200))
+        self.simDisplaySurface = pygame.Surface(self.size)
+        self.dataSurface = pygame.Surface((self.width + 300, 200))
         self.inputsSurface = pygame.Surface((300, self.height))
         self.masterSurface.blits(
             [
-                (self._display_surf, (0, 0)),
+                (self.simDisplaySurface, (0, 0)),
                 (self.dataSurface, (0, self.height)),
-                (self.inputsSurface, (self.weight, 0)),
+                (self.inputsSurface, (self.width, 0)),
             ]
         )
-        self._running = True
+        self.running = True
         pygame.font.init()
         self.text = pygame.font.SysFont("calibri", 15)
 
@@ -310,10 +306,10 @@ class App:
 
                         if event.button == 1:
                             # if left clicked, select item and get its initial coordinates
-                            self._selected = index
+                            self.selected = index
                             self.active = index
                             self.add_action(
-                                ["m", (item.x, item.y), (0, 0), self._selected]
+                                ["m", (item.x, item.y), (0, 0), self.selected]
                             )
 
                             mouse_x, mouse_y = event.pos
@@ -326,7 +322,7 @@ class App:
         elif event.type == pygame.MOUSEBUTTONUP:
             # deselects item
             if event.button == 1:
-                self._selected = None
+                self.selected = None
                 try:
                     self.actionstack[self.actionstackpointer - 1][2] = tuple(
                         [x + y for x, y in zip(event.pos, self._offset)]
@@ -339,14 +335,14 @@ class App:
 
             # moves selected item
             if (
-                self._selected is not None
+                self.selected is not None
             ):  # selected can be `0` so `is not None` is required, which is more efficient than "!="
                 # moves selected item
                 position = (
-                    min(max(0, event.pos[0] + self._offset[0]), self.weight - 8),
+                    min(max(0, event.pos[0] + self._offset[0]), self.width - 8),
                     min(max(0, event.pos[1] + self._offset[1]), self.height - 8),
                 )
-                self.move_item(self._selected, position)
+                self.move_item(self.selected, position)
             else:
                 self._offset = list(event.pos)
 
@@ -535,7 +531,7 @@ class App:
         self.masterSurface.blit(self._display_surf, (0, 0))
         self.inputsSurface.fill(Color(220, 220, 220))
         self.draw_sliders()
-        self.masterSurface.blit(self.inputsSurface, (self.weight, 0))
+        self.masterSurface.blit(self.inputsSurface, (self.width, 0))
 
         pygame.display.flip()
 
@@ -544,13 +540,13 @@ class App:
 
     def on_execute(self):
         if self.on_init() == False:
-            self._running = False
+            self.running = False
         # adds a source in the centre of the screen with placeholder values
-        self.add_source([self.weight / 2, self.height / 2], 10, 1)
-        self.add_source([(self.weight / 2) + 50, (self.height / 2) + 50], 10, 1)
+        self.add_source([self.width / 2, self.height / 2], 10, 1)
+        self.add_source([(self.width / 2) + 50, (self.height / 2) + 50], 10, 1)
         self.add_wall([250, 550], [300, 10], 180)
 
-        while self._running:
+        while self.running:
             for event in pygame.event.get():
                 self.on_event(event)
             self.on_loop()
