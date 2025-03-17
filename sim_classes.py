@@ -9,7 +9,7 @@ class Hitbox:
         self.id = id
 
     def get_id(self):
-        return self._id
+        return self.id
 
     def collide(self):
         return pygame.Rect(self.pos[0], self.pos[1], self.size[0], self.size[1])
@@ -45,15 +45,59 @@ class Hitbox:
 
 
 class Medium:
-    def __init__(self, hitbox, n):
+    def __init__(self, hitbox, rot, n):
         self.hitbox = hitbox
         self.refractive_index = n
+        self.rotation = rot
+
+    def get_rotated(self):
+        p = self.hitbox.get_pos()
+        s = self.hitbox.get_size()
+        r = self.get_rot()
+        c = self.hitbox.get_centre()
+        verts = [
+            (p[0], p[1]),
+            (p[0] + s[0], p[1]),
+            (p[0], p[1] + s[1]),
+            (p[0] + s[0], p[1] + s[1]),
+        ]
+        verts = [(x - c[0], y - c[1]) for (x, y) in verts]
+        r = np.pi * r / 180
+        mat = np.matrix([[np.cos(r), -np.sin(r)], [np.sin(r), np.cos(r)]])
+        verts = [coord * mat for coord in verts]
+
+        print(verts)
+        v = []
+        for coord in verts:
+            coord = coord.A1
+            v.append(coord)
+        print(v)
+        v = [(x + c[0], y + c[1]) for (x, y) in v]
+        return [v[0], v[2], v[3], v[1]]
+
+    def set_rot(self, rot):
+        self.rotation = rot
+
+    def set_pos(self, pos):
+        self.pos = pos
+
+    def set_size(self, size):
+        self.size = size
 
     def get_refractive_index(self):
         return self.refractive_index
 
     def set_refractive_index(self, n):
         self.refractive_index = n
+
+    def get_id(self):
+        return self.hitbox.get_id()
+
+    def get_rect(self):
+        return pygame.Rect(self.hitbox.get_pos(), self.hitbox.get_size())
+
+    def get_rot(self):
+        return self.rotation
 
 
 class Source:
@@ -87,11 +131,6 @@ class Source:
         a = self.get_amp()
         disp = np.sin((time - z) * f) * a
         return disp
-
-
-class Sensor:
-    def __init__(self, hitbox):
-        self.hitbox = hitbox
 
 
 class Slider:

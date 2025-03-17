@@ -9,6 +9,13 @@ from sim_classes import *
 import numpy as np
 
 TITLE = "Wave Sim"
+KEYBINDS = {
+    "addSource": pygame.K_s,
+    "addWall": pygame.K_w,
+    "undo": pygame.K_z,
+    "redo": pygame.K_x,
+    "delete": pygame.K_d,
+}
 
 
 class App:
@@ -105,7 +112,7 @@ class App:
     def on_init(self):
         pygame.init()
         self.masterSurface = pygame.display.set_mode(
-            (self.width + 300, self.height + 200)
+            (self.width + 300, self.height + 200), pygame.OPENGL
         )
         self.simDisplaySurface = pygame.Surface(self.size)
         self.dataSurface = pygame.Surface((self.width + 300, 200))
@@ -347,23 +354,39 @@ class App:
                 self._offset = list(event.pos)
 
         elif event.type == pygame.KEYDOWN:
-            match event.key:
-                case pygame.K_s:
-                    self.add_source(self._offset, 10, 1)
-                    self.add_action(
-                        ["c", [self._offset], "s", self.sources[-1:][0].get_id()]
-                    )
-                case pygame.K_z:
-                    self.undo()
-                case pygame.K_x:
-                    self.redo()
-                case pygame.K_w:
-                    self.add_wall(self._offset, (100, 50), 0)
-                    self.add_action(
-                        ["c", [self._offset], "w", self.walls[-1:][0].get_id()]
-                    )
-                case _:
-                    pass
+            if event.key == KEYBINDS["addSource"]:
+                self.add_source(self._offset, len(self.dragItems), 10, 1)
+                self.add_action(
+                    ["c", [self._offset], "s", self.sources[-1:][0].hitbox.get_id()]
+                )
+            elif event.key == KEYBINDS["undo"]:
+                self.undo()
+            elif event.key == KEYBINDS["redo"]:
+                self.redo()
+            elif event.key == KEYBINDS["addWall"]:
+                self.add_wall(self._offset, (100, 50), 0, len(self.dragItems))
+                self.add_action(
+                    ["c", [self._offset], "w", self.mediums[-1:][0].hitbox.get_id()]
+                )
+            elif event.key == KEYBINDS["delete"]:
+                self.dragItems[self.active] = None
+                typing = ""
+                pos = [0, 0]
+                for id, source in enumerate(self.sources):
+                    if source.hitbox.get_id() == self.active:
+                        pos = source.hitbox.get_pos()
+                        self.sources.pop(id)
+                        typing = "s"
+
+                for id, med in enumerate(self.mediums):
+                    if med.hitbox.get_id() == self.active:
+                        pos = med.hitbox.get_pos()
+                        self.mediums.pop(id)
+                        typing = "w"
+                self.add_action(["d", typing, pos])
+
+            else:
+                pass
 
     def on_loop(self):
         # update the simulation at an uncapped framerate
@@ -528,7 +551,7 @@ class App:
         glDisableVertexAttribArray(self.displayShader.vertexPositionAttribute)
         glDisableVertexAttribArray(self.displayShader.textureCoordAttribute)
 
-        self.masterSurface.blit(self._display_surf, (0, 0))
+        self.masterSurface.blit(self.simDisplaySurface, (0, 0))
         self.inputsSurface.fill(Color(220, 220, 220))
         self.draw_sliders()
         self.masterSurface.blit(self.inputsSurface, (self.width, 0))
@@ -542,9 +565,9 @@ class App:
         if self.on_init() == False:
             self.running = False
         # adds a source in the centre of the screen with placeholder values
-        self.add_source([self.width / 2, self.height / 2], 10, 1)
-        self.add_source([(self.width / 2) + 50, (self.height / 2) + 50], 10, 1)
-        self.add_wall([250, 550], [300, 10], 180)
+        self.add_source([self.width / 2, self.height / 2], 0, 10, 1)
+        self.add_source([(self.width / 2) + 50, (self.height / 2) + 50], 1, 10, 1)
+        self.add_wall([250, 550], [300, 10], 180, 2)
 
         while self.running:
             for event in pygame.event.get():
@@ -565,17 +588,17 @@ class App:
         self.sources.append(source)
         self.add_drag(source.hitbox.collide())
 
-    def add_wall(self, pos, size, id):
+    def add_wall(self, pos, size, rot, id):
         # adds a wall
         hitbox = Hitbox(pos, size, id)
-        wall = Medium(hitbox, 0)
+        wall = Medium(hitbox, rot, 0)
         self.mediums.append(wall)
         self.add_drag(wall.hitbox.collide())
 
-    def add_medium(self, pos, size, id, n):
+    def add_medium(self, pos, size, id, rot, n):
         # adds a wall
         hitbox = Hitbox(pos, size, id)
-        med = Medium(hitbox, n)
+        med = Medium(hitbox, rot, n)
         self.mediums.append(med)
         self.add_drag(med.hitbox.collide())
 
@@ -790,19 +813,21 @@ class App:
                     self.dragItems[action[3]] = None
                     match action[2]:
                         case "s":
-                            for source in self.sources:
-                                if source.get_id() == action[3]:
-                                    self.sources.remove(source)
-                                    del source
+                            for source in range(len(self.sources)):
+                                if self.sources[source].hitbox.get_id() == action[3]:
+                                    self.sources.pop(source)
                         case "w":
-                            for wall in self.walls:
-                                if wall.get_id() == action[3]:
-                                    self.walls.remove(wall)
-                                    del wall
+                            for wall in range(len(self.mediums)):
+                                if self.mediums[wall].hitbox.get_id() == action[3]:
+                                    self.mediums.pop(wall)
 
                 case "d":
-                    # create item
-                    pass
+                    if action[1] == "s":
+                        self.add_source(action[2], len(self.dragItems), 10, 1)
+                    elif action[1] == "w":
+                        self.add_wall(action[2], [300, 300], 0, len(self.dragItems))
+                    else:
+                        pass
                 case _:
                     pass
             self.actionstackpointer -= 1
@@ -819,15 +844,23 @@ class App:
                 case "m":
                     self.move_item(action[3], action[2])
                 case "c":
-                    # create item
-                    pass
+                    if action[2] == "s":
+                        self.add_source(action[1], action[3], 10, 1)
+                    elif action[2] == "w":
+                        self.add_wall(action[1], [300, 300], 0, action[3])
+                    else:
+                        pass
                 case "d":
                     self.dragItems[action[3]] = None
-                    for source in self.sources:
-                        if source.get_id() == action[3]:
-                            self.sources.remove(source)
-                            del source
-                    pass
+                    match action[2]:
+                        case "s":
+                            for source in range(len(self.sources)):
+                                if self.sources[source].hitbox.get_id() == action[3]:
+                                    self.sources.pop(source)
+                        case "w":
+                            for wall in range(len(self.mediums)):
+                                if self.mediums[wall].hitbox.get_id() == action[3]:
+                                    self.mediums.pop(wall)
                 case _:
                     pass
             self.actionstackpointer += 1
